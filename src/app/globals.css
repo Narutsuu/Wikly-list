@@ -1,4 +1,12 @@
 @tailwind base; @tailwind components; @tailwind utilities;
-html,body{background:#F2F5F7;color:#10202B;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+:root{--bg:#F2F5F7;--fg:#10202B;--card:#fff;--line:rgba(16,32,43,.14);--mut:#5F707C}
+.dark{--bg:#0E1A22;--fg:#E8EEF2;--card:#152530;--line:rgba(232,238,242,.16);--mut:#93A4B0;color-scheme:dark}
+html,body{background:var(--bg);color:var(--fg);padding-top:env(safe-area-inset-top)}
 :focus-visible{outline:2px solid #1E6FD9;outline-offset:2px}
+@layer components{
+ .inp{@apply w-full rounded-lg border border-line bg-card px-3 py-2 text-ink}
+ .btn{@apply rounded-lg bg-tide px-4 py-2 font-medium text-white}
+ .btn2{@apply rounded-lg border border-line px-4 py-2 text-ink}
+ .chip{@apply rounded-full border border-line px-3 py-1 text-sm}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
