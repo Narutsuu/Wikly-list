@@ -12,7 +12,9 @@ export const queueLength = () => read<Op[]>(QK, []).length;
 // 1) la modification est d'abord sauvegardée localement, 2) puis envoyée quand le réseau le permet
 export function enqueue(op: Op) { localStorage.setItem(QK, JSON.stringify([...read<Op[]>(QK, []), op])); }
 let running: Promise<boolean> | null = null;
-export function flush(): Promise<boolean> { return (running ??= run().finally(() => { running = null; })); }
+export function flush(): Promise<boolean> { // rejoue tant que la file n'est pas vide (opérations ajoutées pendant l'envoi)
+  return (running ??= (async () => { let ok = true; do { ok = await run(); } while (ok && queueLength() > 0); return ok; })().finally(() => { running = null; }));
+}
 async function run(): Promise<boolean> {
   let q = read<Op[]>(QK, []);
   while (q.length) {

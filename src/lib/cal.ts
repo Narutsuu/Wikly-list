@@ -5,7 +5,7 @@ export type Cat = { id: string; name: string; color: string; updated_at: string 
 export type Ev = { id: string; title: string; starts_at: string; ends_at: string | null; recurrence: string | null; category_id: string | null; color: string | null; all_day: boolean; exdates: string[] | null; series_id: string | null; original_start: string | null; description: string | null; updated_at: string };
 export type Inst = { key: string; title: string; start: Date; end: Date; allDay: boolean; color: string; catId: string | null; ev?: Ev; task?: Task; occ?: Date; done?: boolean };
 export type Form = { kind: "event" | "task"; title: string; date: string; start: string; end: string; allDay: boolean; catId: string; color: string; rec: Rule | null; notes: string; prio: number };
-export const COLOR = "#1E6FD9";
+export const COLOR = "#8B5CF6";
 export const pad = (n: number) => String(n).padStart(2, "0");
 export const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 export const hm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
@@ -17,7 +17,7 @@ export const weekStart = (d: Date, ws: number) => addDays(day0(d), -((d.getDay()
 export const fmtT = (d: Date, h12: boolean) => d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit", hour12: h12 });
 export const textOn = (c: string) => { const n = parseInt(c.slice(1), 16); return (0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255)) / 255 > 0.65 ? "#10202B" : "#fff"; };
 
-export function instances(evs: Ev[], tasks: Task[], cats: Cat[], from: Date, to: Date, showTasks: boolean): Inst[] {
+export function instances(evs: Ev[], tasks: Task[], cats: Cat[], from: Date, to: Date, showTasks: boolean, doneIds?: Set<string>): Inst[] {
   const col = (c: string | null | undefined, own?: string | null) => own || cats.find(x => x.id === c)?.color || COLOR;
   const out: Inst[] = [];
   for (const e of evs) {
@@ -28,7 +28,7 @@ export function instances(evs: Ev[], tasks: Task[], cats: Cat[], from: Date, to:
   if (showTasks) for (const t of tasks) {
     if (!t.due_at) continue;
     const s = new Date(t.due_at), r = parse(t.recurrence);
-    for (const st of r ? occurrences(s, r, from, to) : (s >= from && s <= to ? [s] : [])) out.push({ ...taskInst(t), key: t.id + "@" + st.toISOString(), start: st, end: st, allDay: st.getHours() === 0 && st.getMinutes() === 0, color: col(t.category_id), occ: r ? st : undefined });
+    for (const st of r ? occurrences(s, r, from, to) : (s >= from && s <= to ? [s] : [])) out.push({ ...taskInst(t), key: t.id + "@" + st.toISOString(), start: st, end: st, allDay: st.getHours() === 0 && st.getMinutes() === 0, color: col(t.category_id), occ: r ? st : undefined, done: r ? !!doneIds?.has(`${t.id}_${ymd(st)}`) : t.done });
   }
   return out.sort((a, b) => +a.start - +b.start);
 }
@@ -70,10 +70,10 @@ export function moveInst(s: Store, i: Inst, to: Date) {
   saveForm(s, i, f, "occ");
 }
 export function toggleTask(s: Store, i: Inst) {
-  const t = i.task!, r = parse(t.recurrence), now = new Date().toISOString();
-  if (r && t.due_at) { // tâche récurrente : on passe à l'occurrence suivante au lieu de la clore
-    const next = occurrences(new Date(t.due_at), r, new Date(+i.start + 60000), new Date(+i.start + 800 * 864e5))[0];
-    if (next) return s.upsert("tasks", { ...t, due_at: next.toISOString(), completed_at: now });
+  const t = i.task!;
+  if (i.occ) { // tâche récurrente : état indépendant par journée, l'historique n'est jamais modifié
+    const id = `${t.id}_${ymd(i.start)}`;
+    return s.doneIds.has(id) ? s.remove("task_done", id) : s.upsert("task_done", { id, task_id: t.id, day: ymd(i.start) });
   }
-  s.upsert("tasks", { ...t, done: !t.done, completed_at: t.done ? null : now });
+  s.upsert("tasks", { ...t, done: !t.done, completed_at: t.done ? null : new Date().toISOString() });
 }

@@ -1,11 +1,12 @@
 "use client";
 import { useState } from "react";
+import { motion } from "framer-motion";
 import type { Store } from "@/lib/store";
 import { Form, Inst, COLOR, deleteInst, saveForm, toForm } from "@/lib/cal";
 import type { Rule } from "@/lib/recur";
 export type Ed = { inst: Inst | null; date: Date; kind?: "event" | "task" };
 const WD = ["D", "L", "M", "M", "J", "V", "S"], WN = ["dimanche", "lundi", "mardi", "mercredi", "jeudi", "vendredi", "samedi"];
-export default function Editor({ s, ed, onClose }: { s: Store; ed: Ed; onClose: () => void }) {
+export default function Editor({ s, ed, onClose, notify }: { s: Store; ed: Ed; onClose: () => void; notify: (m: string) => void }) {
   const [f, setF] = useState<Form>(() => ({ ...toForm(ed.inst, ed.date, s.settings.duration), ...(!ed.inst && ed.kind ? { kind: ed.kind } : {}) }));
   const [scope, setScope] = useState<"occ" | "all">("occ");
   const set = (p: Partial<Form>) => setF(x => ({ ...x, ...p }));
@@ -13,14 +14,14 @@ export default function Editor({ s, ed, onClose }: { s: Store; ed: Ed; onClose: 
   const occ = !!ed.inst && !ed.inst.task && !!ed.inst.occ;
   const setR = (p: Partial<Rule>) => r && set({ rec: { ...r, ...p } });
   const catColor = s.cats.find(c => c.id === f.catId)?.color || COLOR;
-  const save = () => { if (!f.title.trim()) return; saveForm(s, ed.inst, { ...f, title: f.title.trim() }, scope); onClose(); };
+  const save = () => { if (!f.title.trim()) return; saveForm(s, ed.inst, { ...f, title: f.title.trim() }, scope); notify(ed.inst ? "Modifications enregistrées" : isTask ? "Tâche ajoutée" : "Événement créé"); onClose(); };
   const del = () => {
     const serie = ed.inst!.task ? !!r : occ && scope === "all";
-    if (confirm(serie ? "Supprimer toute la série ?" : "Supprimer cet élément ?")) { deleteInst(s, ed.inst!, scope); onClose(); }
+    if (confirm(serie ? "Supprimer toute la série ?" : "Supprimer cet élément ?")) { deleteInst(s, ed.inst!, scope); notify("Supprimé"); onClose(); }
   };
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 md:items-center" onClick={onClose}>
-      <form onClick={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); save(); }} className="max-h-[92vh] w-full max-w-md space-y-3 overflow-y-auto rounded-t-2xl bg-card p-5 md:rounded-2xl">
+    <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} transition={{ duration: 0.15 }} className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 md:items-center" onClick={onClose}>
+      <motion.form initial={{ y: 28, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 28, opacity: 0 }} transition={{ duration: 0.2 }} onClick={e => e.stopPropagation()} onSubmit={e => { e.preventDefault(); save(); }} className="max-h-[92vh] w-full max-w-md space-y-3 overflow-y-auto rounded-t-2xl bg-card p-5 md:rounded-2xl">
         {!ed.inst && <div className="flex gap-2">{(["event", "task"] as const).map(k => <button type="button" key={k} onClick={() => set({ kind: k })} className={`chip ${f.kind === k ? "bg-tide text-white" : ""}`}>{k === "event" ? "Événement" : "Tâche"}</button>)}</div>}
         <input autoFocus className="inp" placeholder={isTask ? "Titre de la tâche" : "Titre de l'événement"} value={f.title} onChange={e => set({ title: e.target.value })} />
         <div className="grid grid-cols-2 gap-2">
@@ -49,7 +50,7 @@ export default function Editor({ s, ed, onClose }: { s: Store; ed: Ed; onClose: 
         {occ && <div className="flex gap-4 text-sm"><label><input type="radio" checked={scope === "occ"} onChange={() => setScope("occ")} /> Cette occurrence</label><label><input type="radio" checked={scope === "all"} onChange={() => setScope("all")} /> Toute la série</label></div>}
         {ed.inst?.task && r && <p className="text-sm text-slate2">Les modifications s'appliquent à toute la série.</p>}
         <div className="flex gap-2"><button className="btn">Enregistrer</button><button type="button" className="btn2" onClick={onClose}>Annuler</button>{ed.inst && <button type="button" className="btn2 ml-auto text-red-600" onClick={del}>Supprimer</button>}</div>
-      </form>
-    </div>
+      </motion.form>
+    </motion.div>
   );
 }

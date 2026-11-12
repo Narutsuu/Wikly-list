@@ -6,13 +6,14 @@ import { Task, enqueue, flush, loadCache, queueLength, saveCache } from "./sync"
 import type { Cat, Ev } from "./cal";
 export type Sync = "synced" | "pending" | "offline";
 export type Settings = { displayName: string; theme: "system" | "light" | "dark"; hour12: boolean; weekStart: 0 | 1 | 6; view: "day" | "week" | "month"; duration: number; showTasks: boolean; notif: boolean; notifMin: number };
-export const DEFAULTS: Settings = { displayName: "", theme: "system", hour12: false, weekStart: 1, view: "month", duration: 60, showTasks: true, notif: false, notifMin: 10 };
-const T = ["tasks", "events", "categories"] as const; type TN = (typeof T)[number];
-type D = { tasks: Task[]; events: Ev[]; categories: Cat[] };
+export const DEFAULTS: Settings = { displayName: "", theme: "dark", hour12: false, weekStart: 1, view: "month", duration: 60, showTasks: true, notif: false, notifMin: 10 };
+const T = ["tasks", "events", "categories", "task_done"] as const; type TN = (typeof T)[number];
+type D = { tasks: Task[]; events: Ev[]; categories: Cat[]; task_done: { id: string; task_id: string; day: string; updated_at: string }[] };
 
 export function useStore(session: Session | null) {
   const uid = session?.user.id;
-  const [d, setD] = useState<D>({ tasks: [], events: [], categories: [] });
+  const [d, setD] = useState<D>({ tasks: [], events: [], categories: [], task_done: [] });
+  const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<Settings>(DEFAULTS);
   const [sync, setSync] = useState<Sync>("synced");
   const put = useCallback((t: TN, fn: (r: any[]) => any[]) => setD(p => { const n = fn(p[t]); saveCache(n, t); return { ...p, [t]: n }; }), []);
@@ -21,10 +22,11 @@ export function useStore(session: Session | null) {
   const refresh = useCallback(async () => {
     const ok = await flush();
     if (ok) {
-      for (const t of T) { const { data, error } = await supabase.from(t).select("*"); if (!error && data) put(t, () => data); }
+      for (const t of T) { const { data, error } = await supabase.from(t).select("*"); if (!error && data && queueLength() === 0) put(t, () => data); } // jamais d'écrasement pendant qu'une modification est en attente
       const { data: s } = await supabase.from("settings").select("data").maybeSingle();
       if (s?.data) applySettings(s.data);
     }
+    setLoading(false);
     setSync(!navigator.onLine ? "offline" : ok && queueLength() === 0 ? "synced" : "pending");
   }, [put]);
 
@@ -60,6 +62,6 @@ export function useStore(session: Session | null) {
     const n = { ...settings, ...patch }; applySettings(n);
     enqueue({ kind: "upsert", table: "settings", row: { user_id: uid, data: n, updated_at: new Date().toISOString() } }); setSync("pending"); refresh();
   };
-  return { tasks: d.tasks, events: d.events, cats: d.categories, settings, sync, upsert, remove, saveSettings };
+  return { loading, doneIds: new Set(d.task_done.map(x => x.id)), tasks: d.tasks, events: d.events, cats: d.categories, settings, sync, upsert, remove, saveSettings };
 }
 export type Store = ReturnType<typeof useStore>;
